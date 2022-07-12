@@ -96,15 +96,15 @@ def pine_rma(src, lenght):
     return sum
 
 
-def rsi_tradingview(ohlc: pd.DataFrame, period: int = 14):
+def rsi_tv(ohlc: pd.DataFrame, period: int = 14, round_rsi: bool = True):
     """ Implements the RSI indicator as defined by TradingView on March 15, 2021.
         The TradingView code is as follows:
         //@version=4
         study(title="Relative Strength Index", shorttitle="RSI", format=format.price, precision=2, resolution="")
         len = input(14, minval=1, title="Length")
         src = input(close, "Source", type = input.source)
-        up = rma(max(change(src), lenght=0), lenght=len)
-        down = rma(-min(change(src), lenght=0), lenght=len)
+        up = rma(max(change(src), 0), len)
+        down = rma(-min(change(src), 0), len)
         rsi = down == 0 ? 100 : up == 0 ? 0 : 100 - (100 / (1 + up / down))
         plot(rsi, "RSI", color=#8E1599)
         band1 = hline(70, "Upper Band", color=#C0C0C0)
@@ -116,29 +116,20 @@ def rsi_tradingview(ohlc: pd.DataFrame, period: int = 14):
     :return: an array with the RSI indicator values
     """
 
-    delta = ohlc.diff()
+    delta = ohlc["Close"].diff()
 
     up = delta.copy()
     up[up < 0] = 0
-    #up.fillna(0, inplace=True)
-    #up = pd.Series.ewm(up, alpha=1/period, min_periods=0, adjust=False).mean()
-    up = pine_rma(up, period)
+    up = pd.Series.ewm(up, alpha=1/period).mean()
 
     down = delta.copy()
     down[down > 0] = 0
-    #down.fillna(0, inplace=True)
     down *= -1
-    #down = pd.Series.ewm(down, alpha=1/period, min_periods=0, adjust=False).mean()
-    down = pine_rma(down, period)
+    down = pd.Series.ewm(down, alpha=1/period).mean()
 
-# pine_rma(src, length) =>
-#	alpha = 1/length
-#	sum = 0.0
-#	sum := na(sum[1]) ? sma(src, length) : alpha * src + (1 - alpha) * nz(sum[1])
+    rsi = np.where(up == 0, 0, np.where(down == 0, 100, 100 - (100 / (1 + up / down))))
 
-    rsi = np.where(up == 0, 0, np.where(
-        down == 0, 100, 100 - (100 / (1 + up / down))))
-    return rsi
+    return np.round(rsi, 2) if round_rsi else rsi
 
 
 def calc_bb_o(df, length=None, std=None, mamode=None, ddof=0, **kwargs):
@@ -314,7 +305,7 @@ for i in stocklist.index:
             moving_average_200_20 = 0
 
         try:
-            #v_rsis = rsi_tradingview(df)
+            #v_rsis = rsi_tv(df)
             v_rsi = df.ta.rsi()[-1]
         except Exception as e:
             v_rsi = 0
