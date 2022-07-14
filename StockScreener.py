@@ -96,15 +96,15 @@ def pine_rma(src, lenght):
     return sum
 
 
-def rsi_tv(ohlc: pd.DataFrame, period: int = 14, round_rsi: bool = True):
+def rsi_tradingview(ohlc: pd.DataFrame, period: int = 14):
     """ Implements the RSI indicator as defined by TradingView on March 15, 2021.
         The TradingView code is as follows:
         //@version=4
         study(title="Relative Strength Index", shorttitle="RSI", format=format.price, precision=2, resolution="")
         len = input(14, minval=1, title="Length")
         src = input(close, "Source", type = input.source)
-        up = rma(max(change(src), 0), len)
-        down = rma(-min(change(src), 0), len)
+        up = rma(max(change(src), lenght=0), lenght=len)
+        down = rma(-min(change(src), lenght=0), lenght=len)
         rsi = down == 0 ? 100 : up == 0 ? 0 : 100 - (100 / (1 + up / down))
         plot(rsi, "RSI", color=#8E1599)
         band1 = hline(70, "Upper Band", color=#C0C0C0)
@@ -116,27 +116,36 @@ def rsi_tv(ohlc: pd.DataFrame, period: int = 14, round_rsi: bool = True):
     :return: an array with the RSI indicator values
     """
 
-    delta = ohlc["Close"].diff()
+    delta = ohlc.diff()
 
     up = delta.copy()
     up[up < 0] = 0
-    up = pd.Series.ewm(up, alpha=1/period).mean()
+    #up.fillna(0, inplace=True)
+    #up = pd.Series.ewm(up, alpha=1/period, min_periods=0, adjust=False).mean()
+    up = pine_rma(up, period)
 
     down = delta.copy()
     down[down > 0] = 0
+    #down.fillna(0, inplace=True)
     down *= -1
-    down = pd.Series.ewm(down, alpha=1/period).mean()
+    #down = pd.Series.ewm(down, alpha=1/period, min_periods=0, adjust=False).mean()
+    down = pine_rma(down, period)
 
-    rsi = np.where(up == 0, 0, np.where(down == 0, 100, 100 - (100 / (1 + up / down))))
+# pine_rma(src, length) =>
+#	alpha = 1/length
+#	sum = 0.0
+#	sum := na(sum[1]) ? sma(src, length) : alpha * src + (1 - alpha) * nz(sum[1])
 
-    return np.round(rsi, 2) if round_rsi else rsi
+    rsi = np.where(up == 0, 0, np.where(
+        down == 0, 100, 100 - (100 / (1 + up / down))))
+    return rsi
 
 
 def calc_bb_o(df, length=None, std=None, mamode=None, ddof=0, **kwargs):
     """Indicator: Bollinger Bands (BBANDS)"""
     # Validate arguments
     length = int(length) if length and length > 0 else 5
-    std = float(std) if std and std > 0 else 2.0
+    std = std if std and std > 0 else 2
     mamode = mamode if isinstance(mamode, str) else "sma"
     ddof = int(ddof) if ddof >= 0 and ddof < length else 0
 
@@ -305,7 +314,7 @@ for i in stocklist.index:
             moving_average_200_20 = 0
 
         try:
-            #v_rsis = rsi_tv(df)
+            #v_rsis = rsi_tradingview(df)
             v_rsi = df.ta.rsi()[-1]
         except Exception as e:
             v_rsi = 0
@@ -318,10 +327,10 @@ for i in stocklist.index:
             v_stochD = 0
 
         try:
-            v_bb_fast_u1 = df.ta.bbands(length=20, std=1)['BBU_20_1.0'][-1]
-            v_bb_fast_l1 = df.ta.bbands(length=20, std=1)['BBL_20_1.0'][-1]
-            v_bb_fast_u2 = df.ta.bbands(length=20, std=2)['BBU_20_2.0'][-1]
-            v_bb_fast_l2 = df.ta.bbands(length=20, std=2)['BBL_20_2.0'][-1]
+            v_bb_fast_u1 = df.ta.bbands(length=20, std=1)['BBU_20_1'][-1]
+            v_bb_fast_l1 = df.ta.bbands(length=20, std=1)['BBL_20_1'][-1]
+            v_bb_fast_u2 = df.ta.bbands(length=20, std=2)['BBU_20_2'][-1]
+            v_bb_fast_l2 = df.ta.bbands(length=20, std=2)['BBL_20_2'][-1]
         except Exception as e:
             v_bb_fast_u1 = 0
             v_bb_fast_l1 = 0
@@ -329,10 +338,10 @@ for i in stocklist.index:
             v_bb_fast_l2 = 0
 
         try:
-            v_bb_slow_u1 = df.ta.bbands(length=84, std=1)['BBU_84_1.0'][-1]
-            v_bb_slow_l1 = df.ta.bbands(length=84, std=1)['BBL_84_1.0'][-1]
-            v_bb_slow_u2 = df.ta.bbands(length=84, std=2)['BBU_84_2.0'][-1]
-            v_bb_slow_l2 = df.ta.bbands(length=84, std=2)['BBL_84_2.0'][-1]
+            v_bb_slow_u1 = df.ta.bbands(length=84, std=1)['BBU_84_1'][-1]
+            v_bb_slow_l1 = df.ta.bbands(length=84, std=1)['BBL_84_1'][-1]
+            v_bb_slow_u2 = df.ta.bbands(length=84, std=2)['BBU_84_2'][-1]
+            v_bb_slow_l2 = df.ta.bbands(length=84, std=2)['BBL_84_2'][-1]
         except Exception as e:
             v_bb_slow_u1 = 0
             v_bb_slow_l1 = 0
@@ -355,24 +364,22 @@ for i in stocklist.index:
 
         #DBB %B
         try:
-            v_bb_fast_o = calc_bb_o(df, length=20, std=2)['BBO_20_2.0'][-1]
+            v_bb_fast_o_signal = CONST_NEUTRAL
+            v_bb_fast_o = calc_bb_o(df, length=20, std=2)['BBO_20_2'][-1]
             if v_bb_fast_o >= 1:
                 v_bb_fast_o_signal = CONST_SELL
             elif v_bb_fast_o <= 0:
                 v_bb_fast_o_signal = CONST_BUY
-            else:
-                v_bb_fast_o_signal = CONST_NEUTRAL
         except Exception as e:
             v_bb_fast_o = 0
 
         try:
-            v_bb_slow_o = calc_bb_o(df, length=84, std=2)['BBO_84_2.0'][-1]
+            v_bb_slow_o_signal = CONST_NEUTRAL
+            v_bb_slow_o = calc_bb_o(df, length=84, std=2)['BBO_84_2'][-1]
             if v_bb_fast_o >= 1:
                 v_bb_slow_o_signal = CONST_SELL
             elif v_bb_slow_o <= 0:
                 v_bb_slow_o_signal = CONST_BUY
-            else:
-                v_bb_slow_o_signal = CONST_NEUTRAL
         except Exception as e:
             v_bb_slow_o = 0
 
@@ -505,40 +512,40 @@ for i in stocklist.index:
         v_sentiment = get_sentiment_analysis(stock)
 
         exportRow = pd.DataFrame({
-            'Stock': stock,
-            'Stock_Flag': stock_flag,
-            'Open': round(currentOpen, 4),
-            'Close': round(currentClose, 4),
-            'Change': round(percentageChange, 4),
-            '52 W. Low': round(low_of_52week, 4),
-            '52 W. High': round(high_of_52week, 4),
-            '50 D. MA': round(moving_average_50, 4),
-            '150 D. Ma': round(moving_average_150, 4),
-            '200 D. MA': round(moving_average_200, 4),
-            'SMA S.': signal,
-            'RSI': round(v_rsi, 4),
-            'RSI S.': signal_rsi,
-            'StochK': round(v_stochK, 4),
-            'StochD': round(v_stochD, 4),
-            'Stoch S.': signal_stoch,
-            'Fast BB u2': round(v_bb_fast_u2, 4),
-            'Fast BB u1': round(v_bb_fast_u1, 4),
-            'Fast BB l1': round(v_bb_fast_l1, 4),
-            'Fast BB l2': round(v_bb_fast_l2, 4),
-            'Fast BB S.': v_bb_fast_signal,
-            'Slow BB u2': round(v_bb_slow_u2, 4),
-            'Slow BB u1': round(v_bb_slow_u1, 4),
-            'Slow BB l1': round(v_bb_slow_l1, 4),
-            'Slow BB l2': round(v_bb_slow_l2, 4),
-            'Slow BB S.': v_bb_slow_signal,
-            'Fast BBO': round(v_bb_fast_o, 4),
-            'Fast BBO S.': v_bb_fast_o_signal,
-            'Slow BBO': round(v_bb_slow_o, 4),
-            'Slow BBO S.': v_bb_slow_o_signal,
-            'MACD H.': v_macd_h,
-            'M.Pring V.': v_mp_osc,
-            'M.Pring S.': v_mp_slope,
-            'Sent.': round(v_sentiment, 4)
+                'Stock': stock,
+                'Stock_Flag': stock_flag,
+                'Open': round(currentOpen, 4),
+                'Close': round(currentClose, 4),
+                'Change': round(percentageChange, 4),
+                '52 W. Low': round(low_of_52week, 4),
+                '52 W. High': round(high_of_52week, 4),
+                '50 D. MA': round(moving_average_50, 4),
+                '150 D. Ma': round(moving_average_150, 4),
+                '200 D. MA': round(moving_average_200, 4),
+                'SMA S.': signal,
+                'RSI': round(v_rsi, 4),
+                'RSI S.': signal_rsi,
+                'StochK': round(v_stochK, 4),
+                'StochD': round(v_stochD, 4),
+                'Stoch S.': signal_stoch,
+                'Fast BB u2': round(v_bb_fast_u2, 4),
+                'Fast BB u1': round(v_bb_fast_u1, 4),
+                'Fast BB l1': round(v_bb_fast_l1, 4),
+                'Fast BB l2': round(v_bb_fast_l2, 4),
+                'Fast BB S.': v_bb_fast_signal,
+                'Slow BB u2': round(v_bb_slow_u2, 4),
+                'Slow BB u1': round(v_bb_slow_u1, 4),
+                'Slow BB l1': round(v_bb_slow_l1, 4),
+                'Slow BB l2': round(v_bb_slow_l2, 4),
+                'Slow BB S.': v_bb_slow_signal,
+                'Fast BBO': round(v_bb_fast_o, 4),
+                'Fast BBO S.': v_bb_fast_o_signal,
+                'Slow BBO': round(v_bb_slow_o, 4),
+                'Slow BBO S.': v_bb_slow_o_signal,
+                'MACD H.': v_macd_h,
+                'M.Pring V.': v_mp_osc,
+                'M.Pring S.': v_mp_slope,
+				'Sent.': round(v_sentiment, 4)
         }, index=[0])
 
         exportList = pd.concat([exportList, exportRow], ignore_index=True)
