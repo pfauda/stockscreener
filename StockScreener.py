@@ -2,18 +2,18 @@ import datetime as dt
 from numpy import inf, nan, sign
 import pandas as pd
 import pandas_ta as ta
-from pandas_datareader import data as pdr
+from pandas import ExcelWriter
 from pandas.core.frame import DataFrame
 import numpy as np
-from pandas_ta.momentum import rsi
 import requests
 
 import sqlite3
 from sqlite3 import Error
-from sqlite3.dbapi2 import Cursor
 
 import os
 from xlsxwriter.utility import xl_rowcol_to_cell
+import xlsxwriter
+
 
 CONST_BUY = "Buy"
 CONST_NEUTRAL = "Neutral"
@@ -185,25 +185,24 @@ def get_sentiment_analysis(ticker):
 
     yf_url_base = 'https://query2.finance.yahoo.com/v10/finance/quoteSummary/{0}'.format(ticker)
 
+    rec = 2.5
     try:
         yf_response = requests.get(yf_url_base+'?modules=recommendationTrend', headers=y_header)
         yf_json = yf_response.json()
+        if yf_json['quoteSummary']['result'] != None:
+
+            yf_recomentacion = yf_json['quoteSummary']['result'][0]['recommendationTrend']['trend'][0]
+
+            strong_buy = yf_recomentacion['strongBuy']
+            buy = yf_recomentacion['buy']
+            hold = yf_recomentacion['hold']
+            underperform = yf_recomentacion['sell']
+            sell = yf_recomentacion['strongSell']
+            recommendation_num = strong_buy + buy + hold + underperform + sell
+            if recommendation_num != 0:
+                rec = (strong_buy + buy * 2 + hold * 3 + underperform * 4 + sell * 4) / recommendation_num
     except:
         pass
-
-    rec = 2.5
-    if yf_json['quoteSummary']['result'] != None:
-
-        yf_recomentacion = yf_json['quoteSummary']['result'][0]['recommendationTrend']['trend'][0]
-
-        strong_buy = yf_recomentacion['strongBuy']
-        buy = yf_recomentacion['buy']
-        hold = yf_recomentacion['hold']
-        underperform = yf_recomentacion['sell']
-        sell = yf_recomentacion['strongSell']
-        recommendation_num = strong_buy + buy + hold + underperform + sell
-        if recommendation_num != 0:
-            rec = (strong_buy + buy * 2 + hold * 3 + underperform * 4 + sell * 4) / recommendation_num
 
     return rec
 
@@ -292,6 +291,14 @@ for i in stocklist.index:
             except Exception as e:
                 df_sma['SMA_' + str(sma)] = 0
 
+        currentOpen = 0
+        currentClose = 0
+        percentageChange = 0
+        moving_average_50 = 0
+        moving_average_150 = 0
+        moving_average_200 = 0
+        low_of_52week = 0
+        high_of_52week = 0
         try:
             currentOpen = df['Open'][-1]
             currentClose = df['Close'][-1]
@@ -302,11 +309,7 @@ for i in stocklist.index:
             low_of_52week = min(df['Close'][-260:])
             high_of_52week = max(df['Close'][-260:])
         except Exception as e:
-            moving_average_50 = 0
-            moving_average_150 = 0
-            moving_average_200 = 0
-            low_of_52week = 0
-            high_of_52week = 0
+            pass
 
         try:
             moving_average_200_20 = df_sma['SMA_200'][-20]
@@ -363,25 +366,29 @@ for i in stocklist.index:
             v_bb_slow_signal = CONST_NEUTRAL
 
         #DBB %B
+        v_bb_fast_o_signal = CONST_NEUTRAL
+        v_bb_fast_o = 0
         try:
-            v_bb_fast_o_signal = CONST_NEUTRAL
             v_bb_fast_o = calc_bb_o(df, length=20, std=2)['BBO_20_2'][-1]
             if v_bb_fast_o >= 1:
                 v_bb_fast_o_signal = CONST_SELL
             elif v_bb_fast_o <= 0:
                 v_bb_fast_o_signal = CONST_BUY
         except Exception as e:
-            v_bb_fast_o = 0
+            pass
 
+        v_bb_slow_o_signal = CONST_NEUTRAL
+        v_bb_slow_o = 0
         try:
-            v_bb_slow_o_signal = CONST_NEUTRAL
             v_bb_slow_o = calc_bb_o(df, length=84, std=2)['BBO_84_2'][-1]
             if v_bb_fast_o >= 1:
                 v_bb_slow_o_signal = CONST_SELL
             elif v_bb_slow_o <= 0:
                 v_bb_slow_o_signal = CONST_BUY
         except Exception as e:
-            v_bb_slow_o = 0
+            pass
+
+        v_macd_h = df.ta.macd(9, 26)['MACDh_9_26_9'][-1]
 
         #Martin Pring - Trend Analisys
         try:
@@ -397,7 +404,6 @@ for i in stocklist.index:
             df_roc10 = df.ta.roc(length=265).rolling(130).mean() * 2
             df_roc11 = df.ta.roc(length=390).rolling(130).mean() * 3
             df_roc12 = df.ta.roc(length=530).rolling(195).mean() * 4
-            v_macd_h = df.ta.macd(9, 26)['MACDh_9_26_9'][-1]
             df_mp_osc = df_roc1 + df_roc2 + df_roc3 + df_roc4 + df_roc5 + df_roc6 + df_roc7 + df_roc8 + df_roc9 + df_roc10 + df_roc11 + df_roc12
             if df_mp_osc.isnull()[-1]:
                 v_mp_osc = 0
@@ -661,8 +667,9 @@ for col_num, value in enumerate(exportList.columns.values):
 # Colorear las columnas de Stock, Open y Close
 for row_num, row in exportList.iterrows():
     for col_num in range(row.shape[0]):
-        cell_reference = xl_rowcol_to_cell(
-            row_num + 1, col_num, row_abs=True, col_abs=True)
+        cell_reference = xl_rowcol_to_cell(row_num+1,
+                                           col_num, row_abs=True,
+                                           col_abs=True)
         if col_num == 0:
             if row.iloc[1] == 'Comprado':
                 worksheet.write('%s' % (cell_reference),
@@ -799,4 +806,4 @@ worksheet.set_column('V:Y', None, None, {'hidden': True})
 worksheet.freeze_panes(1, 0)
 worksheet.autofilter('A1:AH' + str(max_row + 1))
 
-writer.save()
+writer.close()

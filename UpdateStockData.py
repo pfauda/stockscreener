@@ -1,6 +1,7 @@
 import sqlite3
 from sqlite3 import Error
-from sqlite3.dbapi2 import Cursor
+#from sqlite3.dbapi2 import Cursor
+from sqlite3.dbapi2 import Connection
 import yfinance as yf
 import datetime as dt
 import numpy as np
@@ -8,7 +9,7 @@ import getpass
 
 from pyhomebroker import HomeBroker
 
-def create_connection(db_file):
+def create_connection(db_file) -> Connection:
     """ create a database connection to the SQLite database
         specified by db_file
     :param db_file: database file
@@ -22,7 +23,7 @@ def create_connection(db_file):
     except Error as e:
         print(e)
 
-    return conn
+    return conn  # type: ignore
 
 def insert_stock_prices_from(conn, stocks_prices):
 
@@ -38,7 +39,7 @@ def select_last_stock_price(conn, stock_name):
     cur = conn.cursor()
     cur.execute(sql, (stock_name,))
     last_date = cur.fetchone()[0]
-    return "2011-01-01" if last_date is None else last_date
+    return "2010-01-01" if last_date is None else last_date
 
 def select_stocks_symbols(conn):
 
@@ -100,7 +101,7 @@ def main():
 
     hb = HomeBroker(265)
     hb_dni = input('DNI:')
-    hb_usr = input('Usuario:')
+    hb_usr = getpass.getpass('Usuario:')
     hb_psw = getpass.getpass('Password:')
     hb.auth.login(dni=hb_dni, user=hb_usr, password=hb_psw, raise_exception=True)
 
@@ -110,6 +111,7 @@ def main():
     with conn:
         tickers = select_stocks_symbols(conn)
         #tickers = [('GFGA.BA',)]
+        #tickers = [('^VIX',), ('^GSPC',)]
         for ticker in tickers:
             print(ticker[0])
             try:
