@@ -142,7 +142,7 @@ def main():
     with conn:
         tickers = select_stocks_symbols(conn)
 
-        for ticker in (pbar:=tqdm(tickers)):
+        for ticker in (pbar:=tqdm(tickers, "Obteniendo datos", colour="red")):
             pbar.set_postfix_str(ticker[0])
             try:
                 if ticker[0][-3:] == '.BA':
@@ -152,7 +152,7 @@ def main():
             except Error as e:
                 pbar.write(str(e))
 
-    print("Proceso finalizado!21719832")
+    print("\nProceso finalizado!")
 
 if __name__ == '__main__':
     main()

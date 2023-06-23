@@ -13,9 +13,16 @@ from typing import Final
 from tqdm import tqdm
 
 class const_signal():
-    CONST_BUY: Final = "Buy"
-    CONST_NEUTRAL: Final = "Neutral"
-    CONST_SELL: Final = "Sell"
+    BUY:           Final = "Buy"
+    BUY_COLOR:     Final = "#9BBB59"
+    NEUTRAL:       Final = "Neutral"
+    NEUTRAL_COLOR: Final = "#FFEB84"
+    SELL:          Final = "Sell"
+    SELL_COLOR:    Final = "#FC6252"
+
+class const_status():
+    BOUGHT: Final = "Comprado"
+    WATCH:  Final = "Vigilar"
 
 class StockScreener:
 
@@ -43,16 +50,16 @@ class StockScreener:
             'StochK',
             'StochD',
             'Stoch S.',
-            'Fast BB u2',
-            'Fast BB u1',
-            'Fast BB l1',
-            'Fast BB l2',
-            'Fast BB S.',
-            'Slow BB u2',
-            'Slow BB u1',
-            'Slow BB l1',
-            'Slow BB l2',
-            'Slow BB S.',
+            #'Fast BB u2',
+            #'Fast BB u1',
+            #'Fast BB l1',
+            #'Fast BB l2',
+            #'Fast BB S.',
+            #'Slow BB u2',
+            #'Slow BB u1',
+            #'Slow BB l1',
+            #'Slow BB l2',
+            #'Slow BB S.',
             'Fast BBO',
             'Fast BBO S.',
             'Slow BBO',
@@ -82,7 +89,7 @@ class StockScreener:
         sql = ''' SELECT * FROM symbols '''
         cur = self.conn.cursor()
         cur.execute(sql)
-        self.stocklist = pd.DataFrame(cur.fetchall(), columns=['Name', 'Panel', 'Comprado', 'Vigilar'])
+        self.stocklist = pd.DataFrame(cur.fetchall(), columns=['Name', 'Panel', const_status.BOUGHT, const_status.WATCH])
 
     def __get_stock_prices__(self, symbol):
 
@@ -181,15 +188,15 @@ class StockScreener:
 
     def get_data(self) -> pd.DataFrame:
 
-        for i in (pbar:=tqdm(self.stocklist.index, "Obteniendo datos")):
+        for i in (pbar:=tqdm(self.stocklist.index, "Cargando datos", colour="green")):
 
             stock = str(self.stocklist['Name'][i])
             stock_flag = ''
-            if self.stocklist['Comprado'][i] != '':
-                stock_flag = 'Comprado'
+            if self.stocklist[const_status.BOUGHT][i] != '':
+                stock_flag = const_status.BOUGHT
 
-            if self.stocklist['Vigilar'][i] != '':
-                stock_flag = 'Vigilar'
+            if self.stocklist[const_status.WATCH][i] != '':
+                stock_flag = const_status.WATCH
 
             df_sma = pd.DataFrame()
             df_bb_fast = pd.DataFrame()
@@ -241,7 +248,6 @@ class StockScreener:
                     moving_average_200_20 = 0
 
                 try:
-                    #v_rsis = rsi_tradingview(df)
                     v_rsi = df.ta.rsi()[-1]
                 except Exception as e:
                     v_rsi = 0
@@ -253,68 +259,32 @@ class StockScreener:
                     v_stochK = 0
                     v_stochD = 0
 
-                try:
-                    v_bb_fast_u1 = df.ta.bbands(length=20, std=1)['BBU_20_1'][-1]
-                    v_bb_fast_l1 = df.ta.bbands(length=20, std=1)['BBL_20_1'][-1]
-                    v_bb_fast_u2 = df.ta.bbands(length=20, std=2)['BBU_20_2'][-1]
-                    v_bb_fast_l2 = df.ta.bbands(length=20, std=2)['BBL_20_2'][-1]
-                except Exception as e:
-                    v_bb_fast_u1 = 0
-                    v_bb_fast_l1 = 0
-                    v_bb_fast_u2 = 0
-                    v_bb_fast_l2 = 0
-
-                try:
-                    v_bb_slow_u1 = df.ta.bbands(length=84, std=1)['BBU_84_1'][-1]
-                    v_bb_slow_l1 = df.ta.bbands(length=84, std=1)['BBL_84_1'][-1]
-                    v_bb_slow_u2 = df.ta.bbands(length=84, std=2)['BBU_84_2'][-1]
-                    v_bb_slow_l2 = df.ta.bbands(length=84, std=2)['BBL_84_2'][-1]
-                except Exception as e:
-                    v_bb_slow_u1 = 0
-                    v_bb_slow_l1 = 0
-                    v_bb_slow_u2 = 0
-                    v_bb_slow_l2 = 0
-
-                if df['Close'][-1] >= v_bb_fast_u1:
-                    v_bb_fast_signal = const_signal.CONST_SELL
-                elif df['Close'][-1] <= v_bb_fast_l1:
-                    v_bb_fast_signal = const_signal.CONST_BUY
-                else:
-                    v_bb_fast_signal = const_signal.CONST_NEUTRAL
-
-                if df['Close'][-1] >= v_bb_slow_u1:
-                    v_bb_slow_signal = const_signal.CONST_SELL
-                elif df['Close'][-1] <= v_bb_slow_l1:
-                    v_bb_slow_signal = const_signal.CONST_BUY
-                else:
-                    v_bb_slow_signal = const_signal.CONST_NEUTRAL
-
-                #DBB %B
-                v_bb_fast_o_signal = const_signal.CONST_NEUTRAL
+                # Oscilador de bndas de bolinger - DBB %B
+                v_bb_fast_o_signal = const_signal.NEUTRAL
                 v_bb_fast_o = 0
                 try:
                     v_bb_fast_o = self.__calc_bb_o__(df, len=20, std=2)
                     if v_bb_fast_o >= 1:
-                        v_bb_fast_o_signal = const_signal.CONST_SELL
+                        v_bb_fast_o_signal = const_signal.SELL
                     elif v_bb_fast_o <= 0:
-                        v_bb_fast_o_signal = const_signal.CONST_BUY
+                        v_bb_fast_o_signal = const_signal.BUY
                 except Exception as e:
                     pass
 
-                v_bb_slow_o_signal = const_signal.CONST_NEUTRAL
+                v_bb_slow_o_signal = const_signal.NEUTRAL
                 v_bb_slow_o = 0
                 try:
                     v_bb_slow_o = self.__calc_bb_o__(df, len=84, std=2)
                     if v_bb_fast_o >= 1:
-                        v_bb_slow_o_signal = const_signal.CONST_SELL
+                        v_bb_slow_o_signal = const_signal.SELL
                     elif v_bb_slow_o <= 0:
-                        v_bb_slow_o_signal = const_signal.CONST_BUY
+                        v_bb_slow_o_signal = const_signal.BUY
                 except Exception as e:
                     pass
 
                 v_macd_h = df.ta.macd(9, 26)['MACDh_9_26_9'][-1]
 
-                #Martin Pring - Trend Analisys
+                # Martin Pring - Trend Analisys
                 try:
                     df_roc1 = df.ta.roc(length=10).rolling(10).mean() * 1
                     df_roc2 = df.ta.roc(length=15).rolling(10).mean() * 2
@@ -420,24 +390,24 @@ class StockScreener:
                 else:
                     cond_Buy_7 = False
 
-                signal = const_signal.CONST_NEUTRAL
-                #worksheet.set_row(i, i, format_neutral)
+                signal = const_signal.NEUTRAL
+                # worksheet.set_row(i, i, format_neutral)
                 if(cond_Buy_1 and cond_Buy_2 and cond_Buy_3 and cond_Buy_4 and cond_Buy_5 and cond_Buy_6 and cond_Buy_7):
-                    signal = const_signal.CONST_BUY
+                    signal = const_signal.BUY
                 if(cond_Sell_1 and cond_Sell_2 and cond_Sell_3 and cond_Sell_4 and cond_Sell_5 and cond_Sell_6 and cond_Sell_7):
-                    signal = const_signal.CONST_SELL
+                    signal = const_signal.SELL
 
-                signal_rsi = const_signal.CONST_NEUTRAL
+                signal_rsi = const_signal.NEUTRAL
                 if v_rsi >= 70:
-                    signal_rsi = const_signal.CONST_SELL
+                    signal_rsi = const_signal.SELL
                 elif v_rsi <= 30:
-                    signal_rsi = const_signal.CONST_BUY
+                    signal_rsi = const_signal.BUY
 
-                signal_stoch = const_signal.CONST_NEUTRAL
+                signal_stoch = const_signal.NEUTRAL
                 if v_stochK >= 80:
-                    signal_stoch = const_signal.CONST_SELL
+                    signal_stoch = const_signal.SELL
                 elif v_stochK <= 20:
-                    signal_stoch = const_signal.CONST_BUY
+                    signal_stoch = const_signal.BUY
 
                 v_sentiment = self.__get_sentiment_analysis__(stock)
 
@@ -458,16 +428,6 @@ class StockScreener:
                         'StochK': round(v_stochK, 4),
                         'StochD': round(v_stochD, 4),
                         'Stoch S.': signal_stoch,
-                        'Fast BB u2': round(v_bb_fast_u2, 4),
-                        'Fast BB u1': round(v_bb_fast_u1, 4),
-                        'Fast BB l1': round(v_bb_fast_l1, 4),
-                        'Fast BB l2': round(v_bb_fast_l2, 4),
-                        'Fast BB S.': v_bb_fast_signal,
-                        'Slow BB u2': round(v_bb_slow_u2, 4),
-                        'Slow BB u1': round(v_bb_slow_u1, 4),
-                        'Slow BB l1': round(v_bb_slow_l1, 4),
-                        'Slow BB l2': round(v_bb_slow_l2, 4),
-                        'Slow BB S.': v_bb_slow_signal,
                         'Fast BBO': round(v_bb_fast_o, 4),
                         'Fast BBO S.': v_bb_fast_o_signal,
                         'Slow BBO': round(v_bb_slow_o, 4),
@@ -495,74 +455,31 @@ class StockScreener:
         # Get the dimensions of the dataframe.
         (max_row, max_col) = self.exportList.shape
 
-        header_format_default = workbook.add_format(
-            {
-                'border': 1,
-                'align': 'left',
-                'font_size': 10,
-                'bg_color': '#C4BD97',
-                'bold': True
-            })
+        #Formatos de la primera columna de Tickers
+        dic_header_format     =  { 'border': 1,
+                                   'align': 'left',
+                                   'font_size': 10,
+                                   'bg_color': '#C4BD97',
+                                   'bold': True }
 
-        header_format_bought = workbook.add_format(
-            {
-                'border': 1,
-                'align': 'left',
-                'font_size': 10,
-                'bg_color': '#C4BD97',
-                'font_color': '#FF0000',
-                'bold': True
-            })
+        header_format_default = workbook.add_format(dic_header_format | {'font_color': '#000000'})
+        header_format_bought  = workbook.add_format(dic_header_format | {'font_color': '#FF0000'})
+        header_format_watch   = workbook.add_format(dic_header_format | {'font_color': '#7030A0'})
 
-        header_format_watch = workbook.add_format(
-            {
-                'border': 1,
-                'align': 'left',
-                'font_size': 10,
-                'bg_color': '#C4BD97',
-                'font_color': '#7030A0',
-                'bold': True
-            })
+        # Formatos de las columnas "C" a "E"
+        dic_header_format     =  { 'border': 1,
+                                   'font_size': 10,
+                                   'num_format': '0.000' }
 
-        header_format_bullish = workbook.add_format(
-            {
-                'border': 1,
-                'font_size': 10,
-                'bg_color': '#9BBB59',
-                'num_format': '0.000'
-            })
+        header_format_bullish = workbook.add_format(dic_header_format | {'bg_color': '#9BBB59'})
+        header_format_bearish = workbook.add_format(dic_header_format | {'bg_color': '#FC6252'})
+        header_format_neutral = workbook.add_format(dic_header_format | {'bg_color': '#FFEB84'})
+        border_format         = workbook.add_format(dic_header_format | {'bg_color': '#C4BD97'})
 
-        header_format_bearish = workbook.add_format(
-            {
-                'border': 1,
-                'font_size': 10,
-                'bg_color': '#FC6252',
-                'num_format': '0.000'
-            })
-
-        header_format_neutral = workbook.add_format(
-            {
-                'border': 1,
-                'font_size': 10,
-                'bg_color': '#FFEB84',
-                'num_format': '0.000'
-            })
-
-        border_format = workbook.add_format(
-            {
-                'border': 1,
-                'font_size': 10,
-                'bg_color': '#C4BD97',
-                'num_format': '0.000'
-            })
-
-        percentage_format = workbook.add_format(
-            {
-                'border': 1,
-                'font_size': 10,
-                'bg_color': '#C4BD97',
-                'num_format': '0.00%'
-            })
+        percentage_format     = workbook.add_format({ 'border': 1,
+                                                      'font_size': 10,
+                                                      'bg_color': '#C4BD97',
+                                                      'num_format': '0.00%'})
 
         # Write the column headers with the defined format.
         worksheet.set_column(0, max_col, 10)
@@ -575,9 +492,9 @@ class StockScreener:
 
                 format = border_format
                 if col_num == 0:
-                    if row.iloc[1] == 'Comprado':
+                    if row.iloc[1] == const_status.BOUGHT:
                         format = header_format_bought
-                    elif row.iloc[1] == 'Vigilar':
+                    elif row.iloc[1] == const_status.WATCH:
                         format = header_format_watch
                     else:
                         format = header_format_default
@@ -594,12 +511,12 @@ class StockScreener:
                 worksheet.write(int(str(row_num))+1, col_num, row.iloc[col_num], format)
 
         my_cond_formats_signal = {
-            '"' + const_signal.CONST_SELL + '"':    '#FC6252',
-            '"' + const_signal.CONST_BUY + '"':     '#9BBB59',
-            '"' + const_signal.CONST_NEUTRAL + '"': '#FFEB84'
+            '"' + const_signal.SELL + '"':    const_signal.SELL_COLOR,
+            '"' + const_signal.BUY + '"':     const_signal.BUY_COLOR,
+            '"' + const_signal.NEUTRAL + '"': const_signal.NEUTRAL_COLOR
         }
 
-        for col in [10, 12, 15, 20, 25, 27, 29]: #K, M, P, U, Z, AB, AD
+        for col in [10, 12, 15, 17, 19]: #K, M, P, R, T
             for val, color in my_cond_formats_signal.items():
                 fmt = workbook.add_format({'bg_color': color})
                 worksheet.conditional_format(1,
@@ -680,23 +597,21 @@ class StockScreener:
             'mid_color': '#FFEB84',
             'max_color': '#9BBB59'}
 
-        # Columnas coloreadas en degrade porrangos
+        # Columnas coloreadas en degrade por rangos
         worksheet.conditional_format(1,  4, max_row,  4, my_cond_formats_change)      #E2:En
         worksheet.conditional_format(1, 11, max_row, 11, my_cond_formats_rsi)         #L2:Ln
         worksheet.conditional_format(1, 13, max_row, 13, my_cond_formats_stoch)       #N2:Nn
         worksheet.conditional_format(1, 14, max_row, 14, my_cond_formats_stoch)       #O2:On
-        worksheet.conditional_format(1, 26, max_row, 26, my_cond_formats_bbo)         #AA2:AAn
-        worksheet.conditional_format(1, 28, max_row, 28, my_cond_formats_bbo)         #AC2:ACn
-        worksheet.conditional_format(1, 30, max_row, 30, my_cond_formats_macd)        #AE2:AEn
-        worksheet.conditional_format(1, 31, max_row, 31, my_cond_formats_martinpring) #AF2:AFn
-        worksheet.conditional_format(1, 32, max_row, 32, my_cond_formats_martinpring) #AG2:AGn
-        worksheet.conditional_format(1, 33, max_row, 33, my_cond_formats_sentiment)   #AH2:AHn
+        worksheet.conditional_format(1, 16, max_row, 16, my_cond_formats_bbo)         #Q2:Qn
+        worksheet.conditional_format(1, 18, max_row, 18, my_cond_formats_bbo)         #S2:Sn
+        worksheet.conditional_format(1, 20, max_row, 20, my_cond_formats_macd)        #U2:Un
+        worksheet.conditional_format(1, 21, max_row, 21, my_cond_formats_martinpring) #V2:Vn
+        worksheet.conditional_format(1, 22, max_row, 22, my_cond_formats_martinpring) #W2:Wn
+        worksheet.conditional_format(1, 23, max_row, 23, my_cond_formats_sentiment)   #X2:Xn
 
         # Columns can be hidden explicitly. This doesn't increase the file size..
         worksheet.set_column(1, 1, None, None, {'hidden': True})   #B:B
         worksheet.set_column(5, 9, None, None, {'hidden': True})   #F:J
-        worksheet.set_column(16, 19, None, None, {'hidden': True}) #Q:T
-        worksheet.set_column(21, 24, None, None, {'hidden': True}) #V:Y
 
         worksheet.freeze_panes(1, 0)
         worksheet.autofilter(0, 0, max_row, 33)
@@ -708,7 +623,7 @@ def main():
 
     if (dt.datetime.today() - start_date).days > 3650:
         start_date = dt.datetime.today() - dt.timedelta(days=3650) #Diez años
-    if dt.datetime.today().hour < 18:
+    if dt.datetime.today().hour < 17:
         end_date = dt.datetime.today() - dt.timedelta(days=1)
     else:
         end_date = dt.datetime.today()
@@ -725,4 +640,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
