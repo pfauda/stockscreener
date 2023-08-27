@@ -508,7 +508,10 @@ class StockScreener:
                 elif col_num == 4:
                     format = percentage_format
 
-                worksheet.write(int(str(row_num))+1, col_num, row.iloc[col_num], format)
+                try:
+                    worksheet.write(int(str(row_num))+1, col_num, row.iloc[col_num], format)
+                except:
+                    pass
 
         my_cond_formats_signal = {
             '"' + const_signal.SELL + '"':    const_signal.SELL_COLOR,
