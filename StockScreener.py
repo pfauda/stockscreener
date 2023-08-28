@@ -4,6 +4,7 @@ import pandas as pd
 import pandas_ta as ta
 import numpy as np
 import requests
+from math import e
 
 import sqlite3
 from sqlite3 import Error
@@ -66,8 +67,8 @@ class StockScreener:
             'Slow BBO S.',
             'MACD H.',
             'M.Pring V.',
-            'M.Pring S.',
-        	'Sent.'])
+            'M.Pring S.'])
+        	#'Keltner'])
 
         self.__create_connection__()
         self.__select_stocks_symbols__()
@@ -186,6 +187,38 @@ class StockScreener:
         self.df_ccl.fillna(method='ffill', axis=0, inplace=True)
         self.start_date = self.df_ccl.index[0]
 
+    def __ma__(self, type, src: pd.Series, len: int):
+
+        result = []
+        if type == "TMA":
+            sma_half_len = np.ceil(len / 2)
+            result = ta.sma(ta.sma(src, sma_half_len), np.floor(len / 2) + 1)
+        elif type == "LSMA":
+            result = ta.linreg(src, len, 0)
+        elif type == "SMA":
+            result = ta.sma(src, len)
+        elif type == "EMA":
+            result = ta.ema(src, len)
+        elif type == "WMA":
+            result = ta.wma(src, len)
+        elif type == "DEMA":
+            result = ta.dema(src, len)
+        elif type == "TEMA":
+            result = ta.tema(src, len)
+        elif type == "HMA":
+            result = ta.hma(src, len)
+
+        return result
+
+    def __calc_kbl__(self, src: pd.Series):
+
+        kbl_maType = "HMA"
+        kbl_len = 60
+        kbl_BBMC = self.__ma__(kbl_maType, src, kbl_len)
+
+        res = src - kbl_BBMC  # type: ignore
+        return res[-1]
+
     def get_data(self) -> pd.DataFrame:
 
         for i in (pbar:=tqdm(self.stocklist.index, "Cargando datos", colour="green")):
@@ -222,95 +255,110 @@ class StockScreener:
                     except Exception as e:
                         df_sma['SMA_' + str(sma)] = 0
 
-                currentOpen = 0
-                currentClose = 0
-                percentageChange = 0
-                moving_average_50 = 0
-                moving_average_150 = 0
-                moving_average_200 = 0
-                low_of_52week = 0
-                high_of_52week = 0
                 try:
                     currentOpen = df['Open'][-1]
                     currentClose = df['Close'][-1]
+                except:
+                    currentOpen = 0.0
+                    currentClose = 0.0
+
+                try:
                     percentageChange = df['Close'].pct_change()[-1]
+                except:
+                    percentageChange = 0.0
+
+                try:
                     moving_average_50 = df_sma['SMA_50'][-1]
+                except:
+                    moving_average_50 = 0.0
+
+                try:
                     moving_average_150 = df_sma['SMA_150'][-1]
+                except:
+                    moving_average_150 = 0.0
+
+                try:
                     moving_average_200 = df_sma['SMA_200'][-1]
-                    low_of_52week = min(df['Close'][-260:])
-                    high_of_52week = max(df['Close'][-260:])
-                except Exception as e:
+                except:
+                    moving_average_200 = 0.0
+
+                low_of_52week = 0.0
+                high_of_52week = 0.0
+                try:
+                    low_of_52week = min(df['Close'][-260:], key=lambda x:float(x)) #min(df['Close'][-260:])
+                    high_of_52week = max(df['Close'][-260:], key=lambda x:float(x)) #max(df['Close'][-260:])
+                except:
                     pass
 
                 try:
                     moving_average_200_20 = df_sma['SMA_200'][-20]
-                except Exception as e:
-                    moving_average_200_20 = 0
+                except:
+                    moving_average_200_20 = 0.0
 
                 try:
                     v_rsi = df.ta.rsi()[-1]
-                except Exception as e:
-                    v_rsi = 0
+                except:
+                    v_rsi = 0.0
 
                 try:
                     v_stochK = df.ta.stoch()['STOCHk_14_3_3'][-1]
                     v_stochD = df.ta.stoch()['STOCHd_14_3_3'][-1]
-                except Exception as e:
-                    v_stochK = 0
-                    v_stochD = 0
+                except:
+                    v_stochK = 0.0
+                    v_stochD = 0.0
 
                 # Oscilador de bndas de bolinger - DBB %B
                 v_bb_fast_o_signal = const_signal.NEUTRAL
-                v_bb_fast_o = 0
+                v_bb_fast_o = 0.0
                 try:
                     v_bb_fast_o = self.__calc_bb_o__(df, len=20, std=2)
                     if v_bb_fast_o >= 1:
                         v_bb_fast_o_signal = const_signal.SELL
                     elif v_bb_fast_o <= 0:
                         v_bb_fast_o_signal = const_signal.BUY
-                except Exception as e:
+                except:
                     pass
 
                 v_bb_slow_o_signal = const_signal.NEUTRAL
-                v_bb_slow_o = 0
+                v_bb_slow_o = 0.0
                 try:
                     v_bb_slow_o = self.__calc_bb_o__(df, len=84, std=2)
                     if v_bb_fast_o >= 1:
                         v_bb_slow_o_signal = const_signal.SELL
                     elif v_bb_slow_o <= 0:
                         v_bb_slow_o_signal = const_signal.BUY
-                except Exception as e:
+                except:
                     pass
 
                 v_macd_h = df.ta.macd(9, 26)['MACDh_9_26_9'][-1]
 
                 # Martin Pring - Trend Analisys
                 try:
-                    df_roc1 = df.ta.roc(length=10).rolling(10).mean() * 1
-                    df_roc2 = df.ta.roc(length=15).rolling(10).mean() * 2
-                    df_roc3 = df.ta.roc(length=20).rolling(10).mean() * 3
-                    df_roc4 = df.ta.roc(length=30).rolling(15).mean() * 4
-                    df_roc5 = df.ta.roc(length=40).rolling(50).mean() * 1
-                    df_roc6 = df.ta.roc(length=65).rolling(65).mean() * 2
-                    df_roc7 = df.ta.roc(length=75).rolling(75).mean() * 3
-                    df_roc8 = df.ta.roc(length=100).rolling(100).mean() * 4
-                    df_roc9 = df.ta.roc(length=195).rolling(130).mean() * 1
-                    df_roc10 = df.ta.roc(length=265).rolling(130).mean() * 2
-                    df_roc11 = df.ta.roc(length=390).rolling(130).mean() * 3
-                    df_roc12 = df.ta.roc(length=530).rolling(195).mean() * 4
+                    df_roc1 =   df.ta.roc(length=10).rolling(10).mean() * 1
+                    df_roc2 =   df.ta.roc(length=15).rolling(10).mean() * 2
+                    df_roc3 =   df.ta.roc(length=20).rolling(10).mean() * 3
+                    df_roc4 =   df.ta.roc(length=30).rolling(15).mean() * 4
+                    df_roc5 =   df.ta.roc(length=40).rolling(50).mean() * 1
+                    df_roc6 =   df.ta.roc(length=65).rolling(65).mean() * 2
+                    df_roc7 =   df.ta.roc(length=75).rolling(75).mean() * 3
+                    df_roc8 =   df.ta.roc(length=100).rolling(100).mean() * 4
+                    df_roc9 =   df.ta.roc(length=195).rolling(130).mean() * 1
+                    df_roc10 =  df.ta.roc(length=265).rolling(130).mean() * 2
+                    df_roc11 =  df.ta.roc(length=390).rolling(130).mean() * 3
+                    df_roc12 =  df.ta.roc(length=530).rolling(195).mean() * 4
                     df_mp_osc = df_roc1 + df_roc2 + df_roc3 + df_roc4 + df_roc5 + df_roc6 + df_roc7 + df_roc8 + df_roc9 + df_roc10 + df_roc11 + df_roc12
                     if df_mp_osc.isnull()[-1]:
-                        v_mp_osc = 0
-                        v_mp_slope = 0
+                        v_mp_osc = 0.0
+                        v_mp_slope = 0.0
                     else:    
                         v_mp_osc = df_mp_osc[-1]
                         if df_mp_osc.isnull()[-2]:
-                            v_mp_slope = 0
+                            v_mp_slope = 0.0
                         else:
                             v_mp_slope = ( df_mp_osc[-1] - df_mp_osc[-2] ) / df_mp_osc[-1]
-                except Exception as e:
-                    v_mp_osc = 0
-                    v_mp_slope = 0
+                except:
+                    v_mp_osc = 0.0
+                    v_mp_slope = 0.0
 
                 # Sell
                 # Condition 1: Current Price > 150 SMA and > 200 SMA
@@ -341,12 +389,12 @@ class StockScreener:
                 else:
                     cond_Sell_5 = False
                 # Condition 6: Current Price is at least 30% above 52 week low (Many of the best are up 100-300% before coming out of consolidation)
-                if(currentClose >= (1.3*low_of_52week)):
+                if (currentClose >= (1.3 * low_of_52week)):
                     cond_Sell_6 = True
                 else:
                     cond_Sell_6 = False
                 # Condition 7: Current Price is within 25% of 52 week high
-                if(currentClose >= (.75*high_of_52week)):
+                if (currentClose >= (0.75 * high_of_52week)):
                     cond_Sell_7 = True
                 else:
                     cond_Sell_7 = False
@@ -385,7 +433,7 @@ class StockScreener:
                 else:
                     cond_Buy_6 = False
                 # Condition 7: Current Price is within 25% of 52 week high
-                if(currentClose <= (.75 * high_of_52week)):
+                if(currentClose <= (0.75 * high_of_52week)):
                     cond_Buy_7 = True
                 else:
                     cond_Buy_7 = False
@@ -409,7 +457,8 @@ class StockScreener:
                 elif v_stochK <= 20:
                     signal_stoch = const_signal.BUY
 
-                v_sentiment = self.__get_sentiment_analysis__(stock)
+                #v_sentiment = self.__get_sentiment_analysis__(stock)
+                v_keltner = self.__calc_kbl__(df["Close"])
 
                 exportRow = pd.DataFrame({
                         'Stock': stock,
@@ -435,7 +484,7 @@ class StockScreener:
                         'MACD H.': v_macd_h,
                         'M.Pring V.': v_mp_osc,
                         'M.Pring S.': v_mp_slope,
-                        'Sent.': round(v_sentiment, 4)
+                        'Keltner': round(v_keltner, 4)
                 }, index=[0])
 
                 self.exportList = pd.concat([self.exportList, exportRow], ignore_index=True)
@@ -584,14 +633,6 @@ class StockScreener:
             'mid_color': '#FFEB84',
             'max_color': '#FC6252'}
 
-        my_cond_formats_sentiment = {
-            'type': '3_color_scale',
-            'mid_type': 'num',
-            'mid_value': '2.5',
-            'min_color': '#9BBB59',
-            'mid_color': '#FFEB84',
-            'max_color': '#FC6252'}
-
         my_cond_formats_martinpring = {
             'type': '3_color_scale',
             'mid_type': 'num',
@@ -599,6 +640,15 @@ class StockScreener:
             'min_color': '#FC6252',
             'mid_color': '#FFEB84',
             'max_color': '#9BBB59'}
+
+        my_cond_formats_keltner = {
+            'type': 'data_bar',
+            'bar_color': 'green',
+            'bar_only': False,
+            'bar_solid': False,
+            'bar_negative_color':'red',
+            'bar_direction': 'left',
+            'bar_axis_position':'middle' }
 
         # Columnas coloreadas en degrade por rangos
         worksheet.conditional_format(1,  4, max_row,  4, my_cond_formats_change)      #E2:En
@@ -610,7 +660,7 @@ class StockScreener:
         worksheet.conditional_format(1, 20, max_row, 20, my_cond_formats_macd)        #U2:Un
         worksheet.conditional_format(1, 21, max_row, 21, my_cond_formats_martinpring) #V2:Vn
         worksheet.conditional_format(1, 22, max_row, 22, my_cond_formats_martinpring) #W2:Wn
-        worksheet.conditional_format(1, 23, max_row, 23, my_cond_formats_sentiment)   #X2:Xn
+        worksheet.conditional_format(1, 23, max_row, 23, my_cond_formats_keltner)     #X2:Xn
 
         # Columns can be hidden explicitly. This doesn't increase the file size..
         worksheet.set_column(1, 1, None, None, {'hidden': True})   #B:B
