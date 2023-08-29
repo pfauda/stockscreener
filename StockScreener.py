@@ -67,8 +67,8 @@ class StockScreener:
             'Slow BBO S.',
             'MACD H.',
             'M.Pring V.',
-            'M.Pring S.'])
-        	#'Keltner'])
+            'M.Pring S.',
+        	'M. Hull'])
 
         self.__create_connection__()
         self.__select_stocks_symbols__()
@@ -216,8 +216,32 @@ class StockScreener:
         kbl_len = 60
         kbl_BBMC = self.__ma__(kbl_maType, src, kbl_len)
 
+        #try:
+        #    desv = 2 * kbl_BBMC.ta.stdev(length=kbl_len) # type: ignore
+        #except:
+        #    desv = 1
+        #
+        #res = src - kbl_BBMC  # type: ignore
+        #
+        #return (res[-1] / desv)
+
         res = src - kbl_BBMC  # type: ignore
-        return res[-1]
+        #v_list = res[-2:].values.tolist()
+        #v_ind = len([1 for num in v_list if num > 0]) - len([-1 for num in v_list if num < 0])
+        v_ind = 0
+        if (res[-1] > 0):
+            if (res[-2] > 0):
+                v_ind = 2
+            else:
+                v_ind = 1
+        elif (res[-1] < 0): 
+            if (res[-2] < 0):
+                v_ind = -2
+            else:
+                v_ind = -1
+
+        return v_ind
+
 
     def get_data(self) -> pd.DataFrame:
 
@@ -458,7 +482,7 @@ class StockScreener:
                     signal_stoch = const_signal.BUY
 
                 #v_sentiment = self.__get_sentiment_analysis__(stock)
-                v_keltner = self.__calc_kbl__(df["Close"])
+                v_mhull = self.__calc_kbl__(df["Close"])
 
                 exportRow = pd.DataFrame({
                         'Stock': stock,
@@ -484,7 +508,7 @@ class StockScreener:
                         'MACD H.': v_macd_h,
                         'M.Pring V.': v_mp_osc,
                         'M.Pring S.': v_mp_slope,
-                        'Keltner': round(v_keltner, 4)
+                        'M. Hull': round(v_mhull, 4)
                 }, index=[0])
 
                 self.exportList = pd.concat([self.exportList, exportRow], ignore_index=True)
@@ -511,9 +535,10 @@ class StockScreener:
                                    'bg_color': '#C4BD97',
                                    'bold': True }
 
-        header_format_default = workbook.add_format(dic_header_format | {'font_color': '#000000'})
-        header_format_bought  = workbook.add_format(dic_header_format | {'font_color': '#FF0000'})
-        header_format_watch   = workbook.add_format(dic_header_format | {'font_color': '#7030A0'})
+        header_format_default  = workbook.add_format(dic_header_format | {'font_color': '#000000'})
+        header_format_default2 = workbook.add_format(dic_header_format | {'font_color': '#000000'})
+        header_format_bought   = workbook.add_format(dic_header_format | {'font_color': '#FF0000'})
+        header_format_watch    = workbook.add_format(dic_header_format | {'font_color': '#7030A0'})
 
         # Formatos de las columnas "C" a "E"
         dic_header_format     =  { 'border': 1,
@@ -523,7 +548,7 @@ class StockScreener:
         header_format_bullish = workbook.add_format(dic_header_format | {'bg_color': '#9BBB59'})
         header_format_bearish = workbook.add_format(dic_header_format | {'bg_color': '#FC6252'})
         header_format_neutral = workbook.add_format(dic_header_format | {'bg_color': '#FFEB84'})
-        border_format         = workbook.add_format(dic_header_format | {'bg_color': '#C4BD97'})
+        border_format         = workbook.add_format(dic_header_format | {'bg_color': const_signal.NEUTRAL_COLOR}) #'bg_color': '#C4BD97'})
 
         percentage_format     = workbook.add_format({ 'border': 1,
                                                       'font_size': 10,
@@ -533,12 +558,14 @@ class StockScreener:
         # Write the column headers with the defined format.
         worksheet.set_column(0, max_col, 10)
         for col_num, value in enumerate(self.exportList.columns.values):
-            worksheet.write(0, col_num, value, header_format_default)
+            if value == 'Keltner':
+                worksheet.write(0, col_num, value, header_format_default2)
+            else:
+                worksheet.write(0, col_num, value, header_format_default)
 
         # Colorear las columnas de Stock, Open y Close
         for row_num, row in self.exportList.iterrows():
             for col_num in range(row.shape[0]):
-
                 format = border_format
                 if col_num == 0:
                     if row.iloc[1] == const_status.BOUGHT:
@@ -644,11 +671,11 @@ class StockScreener:
         my_cond_formats_keltner = {
             'type': 'data_bar',
             'bar_color': 'green',
-            'bar_only': False,
+            'bar_only': True,
             'bar_solid': False,
             'bar_negative_color':'red',
             'bar_direction': 'left',
-            'bar_axis_position':'middle' }
+            'bar_axis_position':'middle'}
 
         # Columnas coloreadas en degrade por rangos
         worksheet.conditional_format(1,  4, max_row,  4, my_cond_formats_change)      #E2:En
