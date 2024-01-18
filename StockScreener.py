@@ -4,7 +4,6 @@ import pandas as pd
 import pandas_ta as ta
 import numpy as np
 import requests
-from math import e
 
 import sqlite3
 from sqlite3 import Error
@@ -152,7 +151,7 @@ class StockScreener:
         try:
             yf_response = requests.get(yf_url_base+'?modules=recommendationTrend', headers=y_header)
             yf_json = yf_response.json()
-            if yf_json['quoteSummary']['result'] != None:
+            if yf_json['quoteSummary']['result'] is None:
 
                 yf_recomentacion = yf_json['quoteSummary']['result'][0]['recommendationTrend']['trend'][0]
 
@@ -164,7 +163,7 @@ class StockScreener:
                 recommendation_num = strong_buy + buy + hold + underperform + sell
                 if recommendation_num != 0:
                     rec = (strong_buy + buy * 2 + hold * 3 + underperform * 4 + sell * 4) / recommendation_num
-        except:
+        except:  # noqa: E722
             pass
 
         return rec
@@ -256,8 +255,6 @@ class StockScreener:
                 stock_flag = const_status.WATCH
 
             df_sma = pd.DataFrame()
-            df_bb_fast = pd.DataFrame()
-            df_bb_slow = pd.DataFrame()
 
             #print(stock)
             pbar.set_postfix_str(stock)
@@ -276,34 +273,34 @@ class StockScreener:
                     sma = x
                     try:
                         df_sma['SMA_' + str(sma)] = df.ta.sma(length=sma)
-                    except Exception as e:
+                    except Exception:
                         df_sma['SMA_' + str(sma)] = 0
 
                 try:
                     currentOpen = df['Open'][-1]
                     currentClose = df['Close'][-1]
-                except:
+                except:  # noqa: E722
                     currentOpen = 0.0
                     currentClose = 0.0
 
                 try:
                     percentageChange = df['Close'].pct_change()[-1]
-                except:
+                except:  # noqa: E722
                     percentageChange = 0.0
 
                 try:
                     moving_average_50 = df_sma['SMA_50'][-1]
-                except:
+                except:  # noqa: E722
                     moving_average_50 = 0.0
 
                 try:
                     moving_average_150 = df_sma['SMA_150'][-1]
-                except:
+                except:  # noqa: E722
                     moving_average_150 = 0.0
 
                 try:
                     moving_average_200 = df_sma['SMA_200'][-1]
-                except:
+                except:  # noqa: E722
                     moving_average_200 = 0.0
 
                 low_of_52week = 0.0
@@ -311,23 +308,23 @@ class StockScreener:
                 try:
                     low_of_52week = min(df['Close'][-260:], key=lambda x:float(x)) #min(df['Close'][-260:])
                     high_of_52week = max(df['Close'][-260:], key=lambda x:float(x)) #max(df['Close'][-260:])
-                except:
+                except:  # noqa: E722
                     pass
 
                 try:
                     moving_average_200_20 = df_sma['SMA_200'][-20]
-                except:
+                except:  # noqa: E722
                     moving_average_200_20 = 0.0
 
                 try:
                     v_rsi = df.ta.rsi()[-1]
-                except:
+                except:  # noqa: E722
                     v_rsi = 0.0
 
                 try:
                     v_stochK = df.ta.stoch()['STOCHk_14_3_3'][-1]
                     v_stochD = df.ta.stoch()['STOCHd_14_3_3'][-1]
-                except:
+                except:  # noqa: E722
                     v_stochK = 0.0
                     v_stochD = 0.0
 
@@ -340,7 +337,7 @@ class StockScreener:
                         v_bb_fast_o_signal = const_signal.SELL
                     elif v_bb_fast_o <= 0:
                         v_bb_fast_o_signal = const_signal.BUY
-                except:
+                except:  # noqa: E722
                     pass
 
                 v_bb_slow_o_signal = const_signal.NEUTRAL
@@ -351,7 +348,7 @@ class StockScreener:
                         v_bb_slow_o_signal = const_signal.SELL
                     elif v_bb_slow_o <= 0:
                         v_bb_slow_o_signal = const_signal.BUY
-                except:
+                except:  # noqa: E722
                     pass
 
                 v_macd_h = df.ta.macd(9, 26)['MACDh_9_26_9'][-1]
@@ -380,7 +377,7 @@ class StockScreener:
                             v_mp_slope = 0.0
                         else:
                             v_mp_slope = ( df_mp_osc[-1] - df_mp_osc[-2] ) / df_mp_osc[-1]
-                except:
+                except:  # noqa: E722
                     v_mp_osc = 0.0
                     v_mp_slope = 0.0
 
@@ -586,7 +583,7 @@ class StockScreener:
 
                 try:
                     worksheet.write(int(str(row_num))+1, col_num, row.iloc[col_num], format)
-                except:
+                except:  # noqa: E722
                     pass
 
         my_cond_formats_signal = {

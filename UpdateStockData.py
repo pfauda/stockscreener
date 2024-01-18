@@ -68,23 +68,27 @@ def get_stock_prices_from_yf(conn, symbol) -> np.recarray:
         start_date = dt.datetime(int(str_start_date[0:4]), int(str_start_date[5:7]), int(str_start_date[8:10]))
         start_date += dt.timedelta(days=1)
 
-        df_stocks_prices = yf.download(symbol,
-            start_date,
-            group_by='row',
-            interval='1d',
-            progress=False,
-            threads=False,
-            auto_adjust=False,
-            rounding=True)
+        try:
+            df_stocks_prices = yf.download(symbol,
+                start_date,
+                group_by='row',
+                interval='1d',
+                progress=False,
+                threads=False,
+                auto_adjust=False,
+                rounding=True)
 
-        df_stocks_prices.fillna(method='ffill', axis=0, inplace=True)
+            df_stocks_prices.fillna(method='ffill', axis=0, inplace=True)
 
-        df_stocks_prices.reset_index(inplace=True)
-        df_stocks_prices.insert(0, 'Name', symbol)
-        df_stocks_prices.drop(df_stocks_prices[df_stocks_prices.Date <= str_start_date].index, inplace=True)
-        df_stocks_prices['Date'] = df_stocks_prices['Date'].apply(lambda x: dt.datetime.strftime(x, '%Y-%m-%d'))
-        df_stocks_prices.rename(columns={'Adj Close': 'AdjClose'}, inplace=True)
-        result = df_stocks_prices.to_records(index=False)
+            df_stocks_prices.reset_index(inplace=True)
+            df_stocks_prices.insert(0, 'Name', symbol)
+            df_stocks_prices.drop(df_stocks_prices[df_stocks_prices.Date <= str_start_date].index, inplace=True)
+            df_stocks_prices['Date'] = df_stocks_prices['Date'].apply(lambda x: dt.datetime.strftime(x, '%Y-%m-%d'))
+            df_stocks_prices.rename(columns={'Adj Close': 'AdjClose'}, inplace=True)
+            result = df_stocks_prices.to_records(index=False)
+
+        except:  # noqa: E722
+            pass
     
     return result
 
